@@ -17,8 +17,8 @@ $SPEC{'org2wp'} = {
 
 This is originally a quick hack because I couldn't make
 [org2blog](https://github.com/punchagan/org2blog) on my Emacs installation to
-work. `org2wp` uses the same format as `org2blog`, but instead of being an Emacs
-package, `org2wp` is a CLI written in Perl.
+work after some update. `org2wp` uses the same format as `org2blog`, but instead
+of being an Emacs package, it is a CLI script written in Perl.
 
 First, create `~/org2wp.conf` containing the API credentials, e.g.:
 
