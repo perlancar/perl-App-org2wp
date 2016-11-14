@@ -20,8 +20,30 @@ This is originally a quick hack because I couldn't make
 work. `org2wp` uses the same format as `org2blog`, but instead of an Emacs
 package, `org2wp` is a CLI written in Perl.
 
-To create a blog post, first write your Org document (e.g. in `post1.org`) using
-this format:
+First, create `~/org2wp.conf` containing the API credentials, e.g.:
+
+    proxy=https://YOURBLOGNAME.wordpress.com/xmlrpc.php
+    username=YOURUSERNAME
+    password=YOURPASSWORD
+
+You can also put multiple credentials in the configuration file using profile
+sections, e.g.:
+
+    [profile=blog1]
+    proxy=https://YOURBLOG1NAME.wordpress.com/xmlrpc.php
+    username=YOURUSERNAME
+    password=YOURPASSWORD
+
+    [profile=blog2]
+    proxy=https://YOURBLOG2NAME.wordpress.com/xmlrpc.php
+    username=YOURUSERNAME
+    password=YOURPASSWORD
+
+and specify which profile you want using command-line option e.g.
+`--config-profile blog1`.
+
+To create a blog post, write your Org document (e.g. in `post1.org`) using this
+format:
 
     #+TITLE: Blog post title
     #+CATEGORY: cat1, cat2
