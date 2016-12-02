@@ -73,6 +73,10 @@ After the post is created, you can update using the same command:
 You can use `--publish` to publish the post, or `--no-publish` to revert it to
 draft.
 
+To set more attributes:
+
+    % org2wp post1.org --comment-status open --extra-attrs '{"ping_status":"closed"}'
+
 _
     args => {
         proxy => {
@@ -105,7 +109,17 @@ _
         },
 
         publish => {
+            summary => 'Whether to publish post or make it a draft',
             schema => 'bool*',
+        },
+        comment_status => {
+            summary => 'Whether to allow comments (open) or not (closed)',
+            schema => ['str*', in=>['open','closed']],
+            default => 'closed',
+        },
+        extra_attrs => {
+            summary => 'Set extra post attributes, e.g. ping_status, post_format, etc',
+            schema => 'hash*',
         },
     },
     features => {
@@ -263,6 +277,8 @@ sub org2wp {
                     category => [map {$cat_ids->{$_}} @$post_cats],
                     post_tag => [map {$tag_ids->{$_}} @$post_tags],
                 },
+                comment_status => $args{comment_status},
+                %{ $args{extra_attrs} // {} },
             };
             push @xmlrpc_args, $postid, $content;
         } else {
@@ -275,6 +291,8 @@ sub org2wp {
                     category => [map {$cat_ids->{$_}} @$post_cats],
                     post_tag => [map {$tag_ids->{$_}} @$post_tags],
                 },
+                comment_status => $args{comment_status},
+                %{ $args{extra_attrs} // {} },
             };
             push @xmlrpc_args, $content;
         }
