@@ -75,7 +75,8 @@ draft.
 
 To set more attributes:
 
-    % org2wp post1.org --comment-status open --extra-attrs '{"ping_status":"closed"}'
+    % org2wp post1.org --comment-status open \
+        --extra-attr ping_status=closed --extra-attr sticky=1
 
 _
     args => {
@@ -118,8 +119,10 @@ _
             default => 'closed',
         },
         extra_attrs => {
+            'x.name.is_plural' => 1,
+            'x.name.singular' => 'extra_attr',
             summary => 'Set extra post attributes, e.g. ping_status, post_format, etc',
-            schema => 'hash*',
+            schema => ['hash*', of=>'str*'],
         },
     },
     features => {
