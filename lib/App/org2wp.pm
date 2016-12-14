@@ -78,6 +78,11 @@ To set more attributes:
     % org2wp post1.org --comment-status open \
         --extra-attr ping_status=closed --extra-attr sticky=1
 
+Another example, to schedule a post in the future, you can use the `post_date`
+attribute (specify in GMT, but will be returned in your time zone setting):
+
+    % org2wp post1.org --publish --extra-attr post_date=20301225T00:00:00
+
 _
     args => {
         proxy => {
