@@ -8,6 +8,8 @@ use strict;
 use warnings;
 use Log::Any::IfLOG '$log';
 
+use POSIX qw(strftime);
+
 our %SPEC;
 
 $SPEC{'org2wp'} = {
@@ -78,10 +80,9 @@ To set more attributes:
     % org2wp post1.org --comment-status open \
         --extra-attr ping_status=closed --extra-attr sticky=1
 
-Another example, to schedule a post in the future, you can use the `post_date`
-attribute (specify in GMT, but will be returned in your time zone setting):
+Another example, to schedule a post in the future:
 
-    % org2wp post1.org --publish --extra-attr post_date=20301225T00:00:00
+    % org2wp post1.org --schedule 20301225T00:00:00
 
 _
     args => {
@@ -117,6 +118,24 @@ _
         publish => {
             summary => 'Whether to publish post or make it a draft',
             schema => 'bool*',
+            description => <<'_',
+
+Equivalent to `--extra-attr post_status=published`, while `--no-publish` is
+equivalent to `--extra-attr post_status=draft`.
+
+_
+        },
+        schedule => {
+            summary => 'Schedule post to be published sometime in the future',
+            schema => 'date*',
+            description => <<'_',
+
+Equivalent to `--publish --extra-attr post_date=DATE`. Note that WordPress
+accepts date in the `YYYYMMDD<T>HH:MM:SS` format, but you specify this option in
+regular ISO8601 format. Also note that time is in your chosen local timezone
+setting.
+
+_
         },
         comment_status => {
             summary => 'Whether to allow comments (open) or not (closed)',
@@ -129,6 +148,9 @@ _
             summary => 'Set extra post attributes, e.g. ping_status, post_format, etc',
             schema => ['hash*', of=>'str*'],
         },
+    },
+    args_rels => {
+        choose_one => [qw/publish schedule/],
     },
     features => {
         dry_run => 1,
@@ -275,10 +297,16 @@ sub org2wp {
         );
         my $content;
 
+        my $publish = $args{publish};
+        my $schedule = defined($args{schedule}) ?
+            strftime("%Y%m%dT%H:%M:%S", localtime($args{schedule})) : undef;
+        $publish = 1 if $schedule;
+
         if ($postid) {
             $meth = 'wp.editPost';
             $content = {
-                (post_status => $args{publish} ? 'publish' : 'draft') x !!(defined $args{publish}),
+                (post_status => $publish ? 'publish' : 'draft') x !!(defined $publish),
+                (post_date => $schedule) x !!(defined $schedule),
                 post_title => $title,
                 post_content => $res->[2],
                 terms => {
@@ -292,7 +320,8 @@ sub org2wp {
         } else {
             $meth = 'wp.newPost';
             $content = {
-                post_status => $args{publish} ? 'publish' : 'draft',
+                post_status => $publish ? 'publish' : 'draft',
+                (post_date => $schedule) x !!(defined $schedule),
                 post_title => $title,
                 post_content => $res->[2],
                 terms => {
@@ -310,6 +339,7 @@ sub org2wp {
         }
 
         $log->infof("[api] Creating/editing post ...");
+        $log->tracef("[api] xmlrpc method=%s, args=%s", $meth, \@xmlrpc_args);
         $call = XMLRPC::Lite->proxy($args{proxy})->call($meth, @xmlrpc_args);
         return [$call->fault->{faultCode}, "Can't create/edit post: ".$call->fault->{faultString}]
             if $call->fault && $call->fault->{faultCode};
