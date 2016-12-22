@@ -131,7 +131,7 @@ _
             description => <<'_',
 
 Equivalent to `--publish --extra-attr post_date=DATE`. Note that WordPress
-accepts date in the `YYYYMMDD<T>HH:MM:SS` format, but you specify this option in
+accepts date in the `YYYYMMDD"T"HH:MM:SS` format, but you specify this option in
 regular ISO8601 format. Also note that time is in your chosen local timezone
 setting.
 
