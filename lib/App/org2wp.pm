@@ -1,6 +1,8 @@
 package App::org2wp;
 
+# AUTHORITY
 # DATE
+# DIST
 # VERSION
 
 use 5.010001;
@@ -14,7 +16,7 @@ our %SPEC;
 
 $SPEC{'org2wp'} = {
     v => 1.1,
-    summary => 'Publish Org document to WordPress as blog post',
+    summary => 'Publish Org document (or heading) to WordPress as blog post',
     description => <<'_',
 
 This is originally a quick hack because I couldn't make
@@ -44,7 +46,11 @@ sections, e.g.:
 and specify which profile you want using command-line option e.g.
 `--config-profile blog1`.
 
-To create a blog post, write your Org document (e.g. in `post1.org`) using this
+### Document mode
+
+You can use the whole Org document file as a blog post (document mode) or a
+single heading as a blog post (heading mode). The default is document mode. To
+create a blog post, write your Org document (e.g. in `post1.org`) using this
 format:
 
     #+TITLE: Blog post title
@@ -62,11 +68,14 @@ this will create a draft post. To publish directly:
 
     % org2wp --publish post1.org
 
-Note that this will also modify your Org file and insert this line at the top:
+Note that this will also modify your Org file and insert this setting line at
+the top:
 
     #+POSTID: 1234
+    #+POSTTIME: [2020-09-16 Wed 11:51]
 
-where 1234 is the post ID retrieved from the server when creating the post.
+where 1234 is the post ID retrieved from the server when creating the post, and
+post time will be set to the current local time.
 
 After the post is created, you can update using the same command:
 
@@ -83,6 +92,42 @@ To set more attributes:
 Another example, to schedule a post in the future:
 
     % org2wp post1.org --schedule 20301225T00:00:00
+
+### Heading mode
+
+In heading mode, each heading will become a separate blog post. To enable this
+mode, specify `--post-heading-level` (`-l`) to 1 (or 2, or 3, ...). This will
+cause a level-1 (or 2, or 3, ...) heading to be assumed as an individual blog
+post. For example, suppose you have `blog.org` with this content:
+
+    * Post A                  :tag1:tag2:tag3:
+    :PROPERTIES:
+    :CATEGORY: cat1, cat2, cat3
+    :END:
+
+    Some text...
+
+    ** a heading of post 1
+    more text ...
+    ** another heading of post 1
+    even more text ...
+
+    * Post B                  :tag2:tag4:
+    Some text ...
+
+with this command:
+
+    % org2wp blog.org -l 1
+
+there will be two blog posts to be posted because there are two level-1
+headings: `Post A` and `Post B`. Post A contains level-2 headings which will
+become headings of the blog post. Headline tags will become blog post tags, and
+to specify categories you use the property `CATEGORY` in the `PROPERTIES`
+drawer.
+
+If, for example, you specify `-l 2` instead of `-l 1` then the level-2 headings
+will become blog posts.
+
 
 _
     args => {
@@ -113,6 +158,20 @@ _
             req => 1,
             pos => 0,
             cmdline_aliases => {f=>{}},
+        },
+
+        post_heading_level => {
+            summary => 'Specify which heading level to be regarded as an individula blog post',
+            schema => 'posint*',
+            cmdline_aliases => {l=>{}},
+            description => <<'_',
+
+If specified, this will enable *heading mode* instead of the default *document
+mode*. In the document mode, the whole Org document file is regarded as a single
+blog post. In the *heading mode*, a heading of certain level will be regarded as
+a single blog post.
+
+_
         },
 
         publish => {
@@ -170,9 +229,82 @@ sub org2wp {
     (-f $filename) or return [404, "No such file '$filename'"];
 
     require File::Slurper;
-    my $org = File::Slurper::read_text($filename);
+    my $org_source = File::Slurper::read_text($filename);
+
+    my $post_heading_level = $args{post_heading_level};
+    my $mode = 'document';
+    if (defined $post_heading_level) {
+        $mode = 'heading';
+    }
+
+    # 1. collect the posts information: the org source, along with their titles,
+    # existing post ID's (if available), as well as all categories and tags we
+    # want to use.
+    my @posts_srcs;   # ("org1", "org2", ...)
+    my @posts_titles; # ("title1", "title2", ...)
+    my @posts_ids;    # (101,     undef,   ...)
+    my @posts_tags;   # ([tag1_for_post1,tag2_for_post1], [tag1_for_post2,...], ...)
+    my @posts_cats;   # ([cat1_for_post1,cat2_for_post1], [cat1_for_post2,...], ...)
 
     require Org::To::HTML::WordPress;
+    if ($mode eq 'heading') {
+        require Org::Parser;
+        my $org_parser = Org::Parser->new;
+        my $org_doc   = $org_parser->parse($org_source);
+
+        my @headlines = $org_doc->find(
+            sub {
+                my $el = shift;
+                $el->isa("Org::Element::Headline") && $el->level == $post_heading_level;
+            });
+        for my $headline (@headlines) {
+            log_trace "Found blog post in heading: %s", $headline->as_string;
+            push @posts_srcs, $headline->as_string . $headline->children_as_string;
+            # XXX posts_ids
+            # XXX posts_ids
+            # XXX post_tags
+            # XXX post_cats
+        }
+    } else {
+        push @posts_srcs, $org_source;
+
+        my $title;
+        if ($org_source =~ /^#\+TITLE:\s*(.+)/m) {
+            $title = $1;
+            log_trace("Extracted title from Org document: %s", $title);
+        } else {
+            $title = "(No title)";
+        }
+        push @posts_titles, $title;
+
+        my $post_tags;
+        if ($org =~ /^#\+TAGS?:\s*(.+)/m) {
+            $post_tags = [split /\s*,\s*/, $1];
+            log_trace("Extracted tags from Org document: %s", $post_tags);
+        } else {
+            $post_tags = [];
+        }
+        push @posts_tags, $post_tags;
+
+        my $post_cats;
+        if ($org =~ /^#\+CATEGOR(?:Y|IES):\s*(.+)/m) {
+            $post_cats = [split /\s*,\s*/, $1];
+            log_trace("Extracted categories from Org document: %s", $post_cats);
+        } else {
+            $post_cats = [];
+        }
+        push @posts_cats, $post_cats;
+
+        my $post_id;
+        if ($org =~ /^#\+POSTID:\s*(\d+)/m) {
+            $post_id = $1;
+            log_trace("Org document already has post ID: %s", $post_id);
+        }
+        push @posts_ids, $post_id;
+    }
+
+    # 2. convert hte org sources to htmls
+
     log_info("Converting Org to HTML ...");
     my $res = Org::To::HTML::WordPress::org_to_html_wordpress(
         source_file => $filename,
@@ -182,40 +314,11 @@ sub org2wp {
     return [500, "Can't convert Org to HTML: $res->[0] - $res->[1]"]
         if $res->[0] != 200;
 
-    my $title;
-    if ($org =~ /^#\+TITLE:\s*(.+)/m) {
-        $title = $1;
-        log_trace("Extracted title from Org document: %s", $title);
-    } else {
-        $title = "(No title)";
-    }
-
-    my $post_tags;
-    if ($org =~ /^#\+TAGS?:\s*(.+)/m) {
-        $post_tags = [split /\s*,\s*/, $1];
-        log_trace("Extracted tags from Org document: %s", $post_tags);
-    } else {
-        $post_tags = [];
-    }
-
-    my $post_cats;
-    if ($org =~ /^#\+CATEGOR(?:Y|IES):\s*(.+)/m) {
-        $post_cats = [split /\s*,\s*/, $1];
-        log_trace("Extracted categories from Org document: %s", $post_cats);
-    } else {
-        $post_cats = [];
-    }
-
-    my $postid;
-    if ($org =~ /^#\+POSTID:\s*(\d+)/m) {
-        $postid = $1;
-        log_trace("Org document already has post ID: %s", $postid);
-    }
-
     require XMLRPC::Lite;
     my $call;
 
-    # create categories if necessary
+    # 3. create categories if necessary
+
     my $cat_ids = {};
     {
         log_info("[api] Listing categories ...");
@@ -253,8 +356,8 @@ sub org2wp {
         }
     }
 
-    # create tags if necessary
-    # create categories if necessary
+    # 4. create tags if necessary
+
     my $tag_ids = {};
     {
         log_info("[api] Listing tags ...");
@@ -292,7 +395,8 @@ sub org2wp {
         }
     }
 
-    # create or edit the post
+    # 5. create or edit the posts
+
     {
         my $meth;
         my @xmlrpc_args = (
@@ -350,7 +454,9 @@ sub org2wp {
             if $call->fault && $call->fault->{faultCode};
     }
 
-    # insert #+POSTID to Org document
+    # 6. insert #+POSTID/:POSTID: and #+POSTTIME/:POSTTIME: to Org
+    # document/heading
+
     unless ($postid) {
         $postid = $call->result;
         $org =~ s/^/#+POSTID: $postid\n/;
