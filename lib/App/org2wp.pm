@@ -531,6 +531,7 @@ sub org2wp {
                     $properties_drawer->_parse_properties($raw_content);
                 } else {
                     require Org::Element::Drawer;
+                    require Org::Element::Text;
                     # XXX need to fix Org::Parser API, this is ugly
                     my $raw_content = "";
                     log_info("Inserting :POSTTIME: & :POSTID: to post[%d] ...", $post_idx);
