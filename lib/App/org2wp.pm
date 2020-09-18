@@ -220,6 +220,10 @@ setting.
 
 _
         },
+        post_password => {
+            summary => 'Set password for posts',
+            schema => 'str*',
+        },
         comment_status => {
             summary => 'Whether to allow comments (open) or not (closed)',
             schema => ['str*', in=>['open','closed']],
@@ -513,6 +517,7 @@ sub org2wp {
                 (post_date => $schedule) x !!(defined $schedule),
                 post_title => $post_title,
                 post_content => $post_html,
+                (post_password => $args{post_password}) x !!(defined $args{post_password}),
                 terms => {
                     category => [map {$cat_ids->{$_}} @$post_cats],
                     post_tag => [map {$tag_ids->{$_}} @$post_tags],
@@ -528,6 +533,7 @@ sub org2wp {
                 (post_date => $schedule) x !!(defined $schedule),
                 post_title => $post_title,
                 post_content => $post_html,
+                (post_password => $args{post_password}) x !!(defined $args{post_password}),
                 terms => {
                     category => [map {$cat_ids->{$_}} @$post_cats],
                     post_tag => [map {$tag_ids->{$_}} @$post_tags],
