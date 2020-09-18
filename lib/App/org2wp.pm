@@ -135,6 +135,8 @@ drawer.
 If, for example, you specify `-l 2` instead of `-l 1` then the level-2 headings
 will become blog posts.
 
+In heading mode, you can use several options to select only certain headlines
+which contain (or don't contain) specified tags.
 
 _
     args => {
@@ -179,6 +181,21 @@ blog post. In the *heading mode*, a heading of certain level will be regarded as
 a single blog post.
 
 _
+            tags => ['category:heading-mode'],
+        },
+        include_heading_tags => {
+            'x.name.is_plural' => 1,
+            'x.name.singular' => 'include_heading_tag',
+            summary => 'Only include heading that has all specified tag(s)',
+            schema => ['array*', of=>'str*'],
+            tags => ['category:heading-mode'],
+        },
+        exclude_heading_tags => {
+            'x.name.is_plural' => 1,
+            'x.name.singular' => 'exclude_heading_tag',
+            summary => 'Exclude heading that has any of the specified tag(s)',
+            schema => ['array*', of=>'str*'],
+            tags => ['category:heading-mode'],
         },
 
         publish => {
@@ -262,7 +279,7 @@ sub org2wp {
         if ($mode eq 'heading') {
             require Org::Parser;
             my $org_parser = Org::Parser->new;
-            my $org_doc   = $org_parser->parse($file_content);
+            my $org_doc   = $org_parser->parse($file_content, {ignore_unknown_settings=>1});
 
             @posts_headlines = $org_doc->find(
                 sub {
@@ -286,11 +303,44 @@ sub org2wp {
                 push @posts_tags, [$headline->get_tags];
 
                 push @posts_cats, [split /\s*,\s*/, ($properties->{CATEGORY} // $properties->{CATEGORIES} // '')];
-                log_trace "Found blog post in heading, title=%s, ID=%d, tags=%s, cats=%s",
-                    $posts_titles[-1],
-                    $posts_ids[-1],
-                    $posts_tags[-1],
-                    $posts_cats[-1];
+
+                my $exclude_reason;
+              FILTER_POST: {
+                    my $post_tags = $posts_tags[-1];
+                    if (defined $args{include_heading_tags} && @{ $args{include_heading_tags} }) {
+                        for my $tag (@{ $args{include_heading_tags} }) {
+                            unless (grep { $_ eq $tag } @$post_tags) {
+                                $exclude_reason = "Does not contain tag '$tag' (specified in include_heading_tags)";
+                                last FILTER_POST;
+                            }
+                        }
+                    }
+                    if (defined $args{exclude_heading_tags} && @{ $args{exclude_heading_tags} }) {
+                        for my $tag (@{ $args{exclude_heading_tags} }) {
+                            if (grep { $_ eq $tag } @$post_tags) {
+                                $exclude_reason = "Contains tag '$tag' (specified in exclude_heading_tags)";
+                                last FILTER_POST;
+                            }
+                        }
+                    }
+                } # FILTER_POST
+
+                if ($exclude_reason) {
+                    log_trace "Excluded blog post in heading, title=%s, ID=%d, tags=%s, cats=%s (reason=%s)",
+                        pop(@posts_titles),
+                        pop(@posts_ids),
+                        pop(@posts_tags),
+                        pop(@posts_cats),
+                        $exclude_reason;
+                } else {
+                    log_trace "Found blog post[%d] in heading, title=%s, ID=%d, tags=%s, cats=%s",
+                        scalar(@posts_srcs),
+                        $posts_titles[-1],
+                        $posts_ids[-1],
+                        $posts_tags[-1],
+                        $posts_cats[-1];
+                }
+
             }
         } else {
             push @posts_srcs, $file_content;
@@ -561,8 +611,8 @@ sub org2wp {
             $do_update_file++;
 
             log_info("Inserting/updating #+POSTTIME ...", $filename);
-            s/^#\+POSTTIME:.*/#+POSTTIME: $posts_times[0]/m or
-                s/^/#+POSTTIME: $posts_times[0]\n/;
+            $file_content =~ s/^#\+POSTTIME:.*/#+POSTTIME: $posts_times[0]/m or
+                $file_content =~ s/^/#+POSTTIME: $posts_times[0]\n/;
 
             my $post_id = $posts_ids[0];
             unless ($post_id) {
