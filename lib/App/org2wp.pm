@@ -285,12 +285,13 @@ sub org2wp {
             my $org_parser = Org::Parser->new;
             my $org_doc   = $org_parser->parse($file_content, {ignore_unknown_settings=>1});
 
-            @posts_headlines = $org_doc->find(
+            my @posts_headlines0 = $org_doc->find(
                 sub {
                     my $el = shift;
                     $el->isa("Org::Element::Headline") && $el->level == $post_heading_level;
                 });
-            for my $headline (@posts_headlines) {
+            for my $headline (@posts_headlines0) {
+                push @posts_headlines, $headline;
                 push @posts_srcs, $headline->children_as_string;
                 push @posts_titles, $headline->title->as_string;
 
@@ -330,14 +331,16 @@ sub org2wp {
                 } # FILTER_POST
 
                 if ($exclude_reason) {
-                    log_trace "Excluded blog post in heading, title=%s, ID=%d, tags=%s, cats=%s (reason=%s)",
+                    pop @posts_headlines;
+                    pop @posts_srcs;
+                    log_info "Excluded blog post in heading, title=%s, ID=%d, tags=%s, cats=%s (reason=%s)",
                         pop(@posts_titles),
                         pop(@posts_ids),
                         pop(@posts_tags),
                         pop(@posts_cats),
                         $exclude_reason;
                 } else {
-                    log_trace "Found blog post[%d] in heading, title=%s, ID=%d, tags=%s, cats=%s",
+                    log_info "Found blog post[%d] in heading, title=%s, ID=%d, tags=%s, cats=%s",
                         scalar(@posts_srcs),
                         $posts_titles[-1],
                         $posts_ids[-1],
@@ -550,7 +553,7 @@ sub org2wp {
             next L5_CREATE_OR_EDIT_POSTS;
         }
 
-        log_info("[api] Creating/editing post ...");
+        log_info("[api] Creating/editing post[$post_idx] ...");
         log_trace("[api] xmlrpc method=%s, args=%s", $meth, \@xmlrpc_args);
         $call = XMLRPC::Lite->proxy($args{proxy})->call($meth, @xmlrpc_args);
         return [$call->fault->{faultCode}, "Can't create/edit post: ".$call->fault->{faultString}]
