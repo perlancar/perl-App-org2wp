@@ -1,10 +1,5 @@
 package App::org2wp;
 
-# AUTHORITY
-# DATE
-# DIST
-# VERSION
-
 use 5.010001;
 use strict;
 use warnings;
@@ -12,6 +7,11 @@ use Log::ger;
 
 use Perinci::Object qw(envresmulti);
 use POSIX qw(strftime);
+
+# AUTHORITY
+# DATE
+# DIST
+# VERSION
 
 our %SPEC;
 
