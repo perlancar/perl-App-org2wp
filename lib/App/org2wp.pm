@@ -272,7 +272,8 @@ sub org2wp {
     my @posts_srcs;   # ("org1", "org2", ...)
     my @posts_htmls;  # ("html1", "html2", ...)
     my @posts_titles; # ("title1", "title2", ...)
-    my @posts_ids;    # (101,     undef,   ...)
+    my @orig_posts_ids;# (101,     undef,   ...)
+    my @new_posts_ids;
     my @posts_tags;   # ([tag1_for_post1,tag2_for_post1], [tag1_for_post2,...], ...)
     my @posts_cats;   # ([cat1_for_post1,cat2_for_post1], [cat1_for_post2,...], ...)
     my @posts_times;  # ("[2020-09-17 Thu 01:55]", ...)
@@ -303,7 +304,7 @@ sub org2wp {
                     });
                 my $properties = $properties_drawer ? $properties_drawer->properties : {};
 
-                push @posts_ids, $properties->{POSTID};
+                push @orig_posts_ids, $properties->{POSTID};
 
                 push @posts_tags, [$headline->get_tags];
 
@@ -335,7 +336,7 @@ sub org2wp {
                     pop @posts_srcs;
                     log_info "Excluded blog post in heading, title=%s, ID=%d, tags=%s, cats=%s (reason=%s)",
                         pop(@posts_titles),
-                        pop(@posts_ids),
+                        pop(@orig_posts_ids),
                         pop(@posts_tags),
                         pop(@posts_cats),
                         $exclude_reason;
@@ -343,7 +344,7 @@ sub org2wp {
                     log_info "Found blog post[%d] in heading, title=%s, ID=%d, tags=%s, cats=%s",
                         scalar(@posts_srcs),
                         $posts_titles[-1],
-                        $posts_ids[-1],
+                        $orig_posts_ids[-1],
                         $posts_tags[-1],
                         $posts_cats[-1];
                 }
@@ -384,7 +385,7 @@ sub org2wp {
                 $post_id = $1;
                 log_trace("Org document already has post ID: %s", $post_id);
             }
-            push @posts_ids, $post_id;
+            push @orig_posts_ids, $post_id;
         }
     } # L1_COLLECT_POSTS_INFORMATION
 
@@ -496,7 +497,7 @@ sub org2wp {
     for my $post_idx (0..$#posts_srcs) {
         my $post_html  = $posts_htmls [$post_idx];
         my $post_title = $posts_titles[$post_idx];
-        my $post_id    = $posts_ids   [$post_idx];
+        my $post_id    = $orig_posts_ids[$post_idx];
         my $post_tags  = $posts_tags  [$post_idx];
         my $post_cats  = $posts_cats  [$post_idx];
 
@@ -549,7 +550,7 @@ sub org2wp {
         if ($dry_run) {
             log_info("(DRY_RUN) [api] Create/edit post, content: %s", $content);
             $posts_times[$post_idx] = _fmt_timestamp_org(time());
-            $posts_ids  [$post_idx] = 9_999_000 + $post_idx;
+            $new_posts_ids[$post_idx] = 9_999_000 + $post_idx;
             next L5_CREATE_OR_EDIT_POSTS;
         }
 
@@ -560,7 +561,7 @@ sub org2wp {
             if $call->fault && $call->fault->{faultCode};
 
         $posts_times[$post_idx] = _fmt_timestamp_org(time());
-        $posts_ids  [$post_idx] //= $call->result;
+        $new_posts_ids[$post_idx] //= $call->result;
     } # L5_CREATE_OR_EDIT_POSTS
 
     # 6. insert #+POSTID/:POSTID: and #+POSTTIME/:POSTTIME: to Org
@@ -583,8 +584,8 @@ sub org2wp {
                     $raw_content =~ s/^:POSTTIME:.*/:POSTTIME: $posts_times[$post_idx]/m
                         or $raw_content =~ s/^/:POSTTIME: $posts_times[$post_idx]\n/;
                     log_info("Inserting/updating :POSTID: to post[%d] ...", $post_idx);
-                    $raw_content =~ s/^:POSTID:.*/:POSTID: $posts_ids[$post_idx]/m
-                        or $raw_content =~ s/^/:POSTID: $posts_ids[$post_idx]\n/;
+                    $raw_content =~ s/^:POSTID:.*/:POSTID: $orig_posts_ids[$post_idx]/m
+                        or $raw_content =~ s/^/:POSTID: $new_posts_ids[$post_idx]\n/;
                     $properties_drawer->children([]);
                     $properties_drawer->document->_add_text($raw_content, $properties_drawer, 2);
                     $properties_drawer->_parse_properties($raw_content);
@@ -594,7 +595,7 @@ sub org2wp {
                     # XXX need to fix Org::Parser API, this is ugly
                     my $raw_content = "";
                     log_info("Inserting :POSTTIME: & :POSTID: to post[%d] ...", $post_idx);
-                    $raw_content .= ":POSTID: $posts_ids[$post_idx]\n";
+                    $raw_content .= ":POSTID: ".($orig_posts_ids[$post_idx] // $new_posts_ids[$post_idx])."\n";
                     $raw_content .= ":POSTTIME: $posts_times[$post_idx]\n";
                     $properties_drawer = Org::Element::Drawer->new(
                         document => $post_headline->document,
@@ -623,11 +624,11 @@ sub org2wp {
             $file_content =~ s/^#\+POSTTIME:.*/#+POSTTIME: $posts_times[0]/m or
                 $file_content =~ s/^/#+POSTTIME: $posts_times[0]\n/;
 
-            my $post_id = $posts_ids[0];
-            unless ($post_id) {
-                $post_id = $call->result;
-                log_info("Inserting #+POSTID (%d) ...", $post_id);
-                $file_content =~ s/^/#+POSTID: $post_id\n/;
+            my $orig_post_id = $orig_posts_ids[0];
+            unless ($orig_post_id) {
+                my $new_post_id = $call->result;
+                log_info("Inserting #+POSTID (%d) ...", $new_post_id);
+                $file_content =~ s/^/#+POSTID: $new_post_id\n/;
             }
         }
 
