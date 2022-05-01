@@ -37,6 +37,12 @@ First, create `~/org2wp.conf` containing the API credentials, e.g.:
     username=YOURUSERNAME
     password=YOURPASSWORD
 
+Note that `proxy` is the endpoint URL of your WordPress instance's XML-RPC
+server, which can be hosted on `wordpress.com` or on other server, including
+your own. It has nothing to do with HTTP/HTTPS proxy; the term "proxy" is used
+by the <pm:XMLRPC::Lite> and <pm:SOAP::Lite> Perl libraries and `org2wp` simply
+uses the same terminology.
+
 You can also put multiple credentials in the configuration file using profile
 sections, e.g.:
 
@@ -138,6 +144,14 @@ will become blog posts.
 In heading mode, you can use several options to select only certain headlines
 which contain (or don't contain) specified tags.
 
+### FAQ
+
+#### What if I want to set HTTP/HTTPS proxy?
+
+You can set the environment variable `HTTP_proxy` (and `HTTP_proxy_user` and
+`HTTP_proxy_pass` additionally). See the <pm:SOAP::Lite> documentation for more
+details, which uses <pm:LWP::UserAgent> underneath.
+
 _
     args => {
         proxy => {
@@ -146,6 +160,12 @@ _
             description => <<'_',
 
 Example: `https://YOURBLOGNAME.wordpress.com/xmlrpc.php`.
+
+Note that `proxy` is the endpoint URL of your WordPress instance's XML-RPC
+server, which can be hosted on `wordpress.com` or on other server, including
+your own. It has nothing to do with HTTP/HTTPS proxy; the term "proxy" is used
+by the <pm:XMLRPC::Lite> and <pm:SOAP::Lite> Perl libraries and `org2wp` simply
+uses the same terminology.
 
 _
             tags => ['credential'],
